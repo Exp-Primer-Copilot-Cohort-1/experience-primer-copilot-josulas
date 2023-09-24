@@ -1,80 +1,55 @@
 // create web server
 var express = require('express');
-var router = express.Router();
-// import model
-var Comment = require('../models/comment');
-var Post = require('../models/post');
-// import middleware
-var middleware = require('../middleware');
-// ==============================
-// COMMENTS ROUTES
-// ==============================
+var app = express();
 
-// NEW COMMENT
-router.get('/posts/:id/comments/new', middleware.isLoggedIn, function(req, res){
-    // find post by id
-    Post.findById(req.params.id, function(err, post){
-        if(err){
+// import modules
+var bodyParser = require('body-parser');
+var mongoose = require('mongoose');
+
+// connect to mongodb
+mongoose.connect('mongodb://localhost/comments');
+
+// create schema for comments
+var commentSchema = new mongoose.Schema({
+    name: String,
+    comment: String
+});
+
+// create model
+var Comment = mongoose.model('Comment', commentSchema);
+
+// set up body parser
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// set up static files
+app.use(express.static('public'));
+
+// set up view engine
+app.set('view engine', 'ejs');
+
+// get request
+app.get('/', function(req, res) {
+    Comment.find({}, function(err, comments) {
+        if (err) {
             console.log(err);
         } else {
-            res.render('comments/new', {post: post});
+            res.render('index', { comments: comments });
         }
     });
 });
 
-// CREATE COMMENT
-router.post('/posts/:id/comments', middleware.isLoggedIn, function(req, res){
-    // lookup post using ID
-    Post.findById(req.params.id, function(err, post){
-        if(err){
+// post request
+app.post('/', function(req, res) {
+    Comment.create(req.body.comment, function(err, newComment) {
+        if (err) {
             console.log(err);
-            res.redirect('/posts');
         } else {
-            // create new comment
-            Comment.create(req.body.comment, function(err, comment){
-                if(err){
-                    req.flash('error', 'Something went wrong');
-                    console.log(err);
-                } else {
-                    // add username and id to comment
-                    comment.author.id = req.user._id;
-                    comment.author.username = req.user.username;
-                    // save comment
-                    comment.save();
-                    // connect new comment to post
-                    post.comments.push(comment);
-                    post.save();
-                    // redirect to show page
-                    req.flash('success', 'Successfully added comment');
-                    res.redirect('/posts/' + post._id);
-                }
-            });
+            res.redirect('/');
         }
     });
 });
 
-// EDIT COMMENT
-router.get('/posts/:id/comments/:comment_id/edit', middleware.checkCommentOwnership, function(req, res){
-    Comment.findById(req.params.comment_id, function(err, foundComment){
-       if(err){
-           res.redirect('back');
-       } else {
-           res.render('comments/edit', {post_id: req.params.id, comment: foundComment});
-       }
-    });
+// listen to port
+app.listen(3000, function() {
+    console.log('Server is running on port 3000');
 });
-
-// UPDATE COMMENT
-router.put('/posts/:id/comments/:comment_id', middleware.checkCommentOwnership, function(req, res){
-    Comment.findByIdAndUpdate(req.params.comment_id, req.body.comment, function(err, updatedComment){
-       if(err){
-           res.redirect('back');
-       } else {
-           res.redirect('/posts/' + req.params.id);
-       }
-    });
-});
-
-// DESTROY COMMENT
-router.delete('/posts/:id/comments/:comment_id', middleware.checkCommentOwnership, function(req, res){
-    //
